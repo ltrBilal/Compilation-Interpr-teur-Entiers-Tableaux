@@ -1,0 +1,256 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.*;
+
+parser code {:
+	public static void main(String args[]) throws Exception {
+		new parser(new Yylex(new InputStreamReader(System.in))).parse();
+	}
+	public int pline(){
+		return ((Yylex)getScanner()).getYyLine();
+	}
+	public int pcolumn(){
+		return ((Yylex)getScanner()).getYyColumn();
+	}
+	public String ptext(){
+		return ((Yylex)getScanner()).getYyText();
+	}
+	public String placeDErreur(){
+		return " ligne "+pline()+" colone "+pcolumn();
+	}
+	public void syntax_error(Symbol cur_token) { 
+		
+		if(tokenToString(cur_token).equals("ID")) {
+			report_error("ERREUR ID inconnu : <"+ ptext()+">", null);
+		}
+		else if(tokenToString(cur_token).equals("+") || tokenToString(cur_token).equals("*")) {
+			report_error("ERREUR de type sur l’operateur "+tokenToString(cur_token), null);
+		}
+		else if(tokenToString(cur_token).equals("NL")){
+			report_error("ERREUR de type sur l’operateur "+tokenToString(cur_token), null);
+		}
+		else if(tokenToString(cur_token).equals("^")){
+			report_error("ERREUR de type sur l’operateur "+tokenToString(cur_token), null);
+		}
+		else if(tokenToString(cur_token).equals("@")){
+			report_error("ERREUR de type sur tableau "+tokenToString(cur_token), null);
+		}
+		else if(tokenToString(cur_token).equals("NB")){
+			report_error("ERREUR de type sur l'operateur ^", null);
+		}
+		else if(tokenToString(cur_token).equals("tab")){
+			report_error("ERREUR de type sur l'operateur ^", null);
+		}
+		else report_error("ERREUR INCONNU "+placeDErreur(), null);
+		System.out.println();
+	}
+	public String tokenToString (Symbol token) {
+		
+		switch (token.sym) {
+		case sym.ADD : return "+";
+		case sym.MULT : return "*";
+		case sym.ID : return "ID"; 
+		case sym.CONCAT : return "^";
+		case sym.NB : return "NB";
+		case sym.TABLEAU : return "tab";
+
+		default : return "inconnu";
+	}
+}
+
+:}
+
+action code {:
+	Map<String, Integer> mapDesValeurs = new HashMap<String, Integer>();
+	Map<String, ArrayList<Integer>> mapDesTableaux = new HashMap<String, ArrayList<Integer>>();
+	/**
+	* la fonction fait la conversion d'une String à un tableau des entier
+	 elle est faite pour transformer le tableau recupérer par le lex à une ArrayList
+	* @param table : le tableau de type String à convertir
+	* @return le tableau avec les même elements mais de type ArrayList<Integer>
+	**/
+	ArrayList<Integer> convertirToTbale(String table){
+		ArrayList<Integer> res = new ArrayList<Integer>();
+		  for(int i = 1; i < table.length()-1; ){
+			int j = i;
+			String sousChaine = "";
+			while(j < table.length()-1 && table.charAt(j) != ','){
+				sousChaine += table.charAt(j);
+				j++;
+			}
+			res.add(Integer.parseInt(sousChaine));
+			i = j+1;
+		  }
+		  return res;
+	}
+:}
+
+terminal Integer NB;
+
+terminal String ID, TABLEAU;
+
+terminal Symbol ADD, MULT, ACOLAD_O, ACOLAD_F, ACROCHET_O, ACROCHET_F, VIRGULE, CONCAT, PARENTHES_O, PRINT, PARENTHES_F, EGALE, ARUBAS, NL;
+
+non terminal calculatrice, liste_operations, affectation;
+non terminal Integer operation;
+non terminal ArrayList<Integer> concatination, tableau, expression;
+
+precedence left ACROCHET_O;
+precedence left CONCAT;
+precedence left NB;
+precedence left ADD;
+precedence left MULT;
+	
+calculatrice ::= liste_operations {: 
+				//	System.out.println(" la mapDesValeurs est "+mapDesValeurs);
+				//	System.out.println(" la mapDesTableaux est "+mapDesTableaux);
+                    System.out.println(" Au revoir ");
+               :};	
+        
+liste_operations ::= liste_operations operation:n {:
+			if(n!=null){
+				System.out.println("- : entier "+n);
+			}		
+		:}
+		|liste_operations concatination:t{:
+		        if(t != null){
+		        System.out.println("- : tableau "+t);
+				}
+		:}
+		|liste_operations affectation
+		|liste_operations PRINT{:
+				if(mapDesValeurs.size() > 0 || mapDesTableaux.size() > 0){
+					System.out.println("Les valeurs des variables sont : ");
+					Iterator<Map.Entry<String, Integer>> it = mapDesValeurs.entrySet().iterator();
+					while(it.hasNext()){
+						Map.Entry<String, Integer> courant = it.next();
+						System.out.println(courant.getKey()+" = entier "+courant.getValue());
+					}
+					Iterator<Map.Entry<String, ArrayList<Integer>>> itor = mapDesTableaux.entrySet().iterator();
+					while(itor.hasNext()){
+						Map.Entry<String, ArrayList<Integer>> courant2 = itor.next();
+						System.out.println(courant2.getKey()+" = tableau "+courant2.getValue());
+					}
+				}
+				else System.out.println("Il n'y a pas des variables ");
+		:}
+		| liste_operations NL
+		| ;
+
+operation ::= operation:n1 ADD operation:n2 {:
+				if(n1 instanceof Integer && n2 instanceof Integer){
+					if(n1 != null && n2 != null) RESULT = new Integer(n1+n2);
+				}
+		  :}
+	      | operation:n1 MULT operation:n2 {:
+		  		if(n1 instanceof Integer && n2 instanceof Integer){
+					if(n1 != null && n2 != null) RESULT = new Integer(n1*n2);
+				}
+		  :}
+	      | NB:n{:
+		  		RESULT = n;
+		  :}
+	      | PARENTHES_O operation:n PARENTHES_F {:RESULT = n;:}
+		  | ID:id{: 
+				if( mapDesValeurs.get(id) != null) RESULT = mapDesValeurs.get(id);
+				else System.out.println("ERREUR semantique -> identificateur inconnu : "+id);
+		  :}
+		  | ARUBAS ID:id ACROCHET_O operation:n ACROCHET_F{:
+		        String key = "@"+id;
+				if(mapDesTableaux.get(key) != null){
+					if(n < mapDesTableaux.get(key).size() && n >= 0)
+						RESULT = mapDesTableaux.get(key).get(n);
+					else{
+						System.out.println("ERREUR Indice "+n+" INVALID dans le tableau : "+ key);
+						RESULT = null;
+					}
+				}
+		  		else{
+					System.out.println("ERREUR semantique -> identificateur inconnu : "+key);
+					RESULT = null;
+				}
+		  :}
+		  | tableau:t ACROCHET_O operation:n ACROCHET_F{:
+					RESULT = t.get(n);
+		  :}
+		  | operation:n MULT tableau{:
+		  			if(n != null){
+						System.out.println("ERREUR de type sur l’operateur *");
+					}
+		  :}
+		  | operation:n ADD tableau{:
+		  			if(n != null){
+						System.out.println("ERREUR de type sur l’operateur +");
+					}
+		  :}
+		  | error;
+
+affectation ::= ID:id EGALE operation:n{:
+					if(n != null){
+						System.out.println(id+" = entier "+n);	
+						mapDesValeurs.put(id, n);
+					}
+		:}
+		 |ARUBAS ID:id EGALE concatination:c{:
+				String key = "@"+id;
+				if(c != null){
+					mapDesTableaux.put(key, c);
+					System.out.println("@"+id+" = tableau "+c);	
+				}
+		   :}
+		| ID:id EGALE concatination:t{:
+					System.out.println("ERREUR semantique -> affectation d'un tableau à un entier "+id);
+		:};
+
+concatination ::= tableau:t1 CONCAT concatination:t2{:
+				if(t1 instanceof ArrayList<?> && t2 instanceof ArrayList<?>){
+					ArrayList<Integer> t = new ArrayList<Integer>();
+					t.addAll(t1);
+					t.addAll(t2);
+					RESULT = t;
+				}
+		:}
+		|tableau:t{: 
+				RESULT = t;
+		:}
+		| PARENTHES_O concatination:c PARENTHES_F{: RESULT = c; :}
+		|  concatination CONCAT operation{:
+					System.out.println("ERREUR de type sur l’operateur ^");
+					RESULT = null;
+		:};
+
+tableau ::= TABLEAU:t{:
+				ArrayList<Integer> table = convertirToTbale(t);
+				RESULT = table;
+			:}
+			| ACOLAD_O expression:e ACOLAD_F{:
+		   		RESULT = e;
+			:}
+			| ACOLAD_O ACOLAD_F{:
+				RESULT = new ArrayList<Integer>();
+			:}
+			| ARUBAS ID:id{:
+				String key = "@"+id;
+				if(mapDesTableaux.get(key) != null){
+					RESULT = mapDesTableaux.get(key);
+				}else{
+					System.out.println("ERREUR semantique -> identificateur inconnu : "+key);
+					RESULT = null;
+				}
+		   :}
+		   |ARUBAS ID:id EGALE operation:n{:
+		   		if(n != null){
+					String key = "@"+id;
+		   			System.out.println("ERREUR semantique -> affectation d'un entier à un tableau "+key);
+				}
+		   :};
+
+expression ::= expression:e VIRGULE operation:n{:
+				e.add(n);
+				RESULT = e;
+			:} 
+			| operation:n{:
+				ArrayList<Integer> res = new ArrayList<Integer>();
+				res.add(n);
+				RESULT = res;
+			:};
